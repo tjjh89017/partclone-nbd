@@ -1,6 +1,13 @@
 # partclone-nbd
 Direct mount partclone image via nbdkit
 
+## Usage
+
+```
+mkdir build; cd build
+rm -rf *; cmake ..; make; nbdkit -fv -r --filter=./libnbdkit-partlcone-filter.so file /nfs/bt/ezio-nbd/2021-09-24-14-img-ubuntu-xz/vda2.ext4-ptcl-img
+```
+
 ## License
 
 partclone-nbd, mount partclone image via NBD directly

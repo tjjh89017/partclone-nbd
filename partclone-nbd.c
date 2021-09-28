@@ -15,6 +15,7 @@ struct partclone_handle {
 	uint64_t *bitmap;
 	uint64_t block_start;
 	uint64_t bitmap_size;
+	uint64_t size;
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -54,7 +55,7 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	}*/
 
 	/* call get_size first */
-	next->get_size(nxdata);
+	h->size = next->get_size(nxdata);
 	
 	/* construct image_header */
 	h->image_header = malloc(sizeof(struct image_header));
@@ -137,6 +138,12 @@ static int partclone_pread(struct nbdkit_next_ops *next, void *nxdata, void *han
 		if(test_bit(block_offset, h->bitmap, total_block) > 0) {
 			/* read from image */
 			uint64_t offset = offs + i + block_start + (blocks_before_offs / blocks_per_checksum) * 4;
+			if(offset > h->size) {
+				memset(buf + i, 0, read_count);
+				block_offset += 1;
+				nbdkit_debug("offset %llu is empty", offs + i);
+				continue;
+			}
 			r = next->pread(nxdata, buf + i, read_count, offset, flags, err);
 			if(r == -1) {
 				errno = *err;

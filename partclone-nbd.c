@@ -92,6 +92,8 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	initialized = 1;
 	nbdkit_debug("prepare 3");
 
+	/* TODO prepare a list of range to search true offset */
+
 	return 0;
 }
 
@@ -106,58 +108,8 @@ static int partclone_pread(struct nbdkit_next_ops *next, void *nxdata, void *han
 {
 	nbdkit_debug("pread");
 	struct partclone_handle *h = handle;
-	uint64_t total_block = h->image_header->total_block;
-	uint64_t block_size = h->image_header->block_size;
-	uint64_t block_start = h->block_start;
-	uint32_t blocks_per_checksum = h->image_header->blocks_per_checksum;
-	int r = 0;
-	uint64_t i = 0, j = 0;
-	uint64_t blocks_before_offs = 0;
-
-	/* search how many blocks from block_start to offs */
-	nbdkit_debug("total block: %llu", total_block);
-	nbdkit_debug("before search blocks");
-	for(i = block_start, j = 0; i < offs; i += block_size, j++) {
-		if(j >= total_block || j >= h->bitmap_size * 64) {
-			/* excess total blocks return err */
-			nbdkit_error("pread: %m");
-			return -1;
-		}
-		blocks_before_offs += test_bit(j, h->bitmap, total_block) > 0 ? 1 : 0;
-	}
-	nbdkit_debug("after search blocks");
-	nbdkit_debug("blocks_before_offs: %llu", blocks_before_offs);
-	nbdkit_debug("blocks_per_checksum: %llu", blocks_per_checksum);
-
-	uint64_t block_offset = offs / block_size;
-	for(i = 0; i < count; i += block_size) {
-		uint32_t read_count = block_size;
-		if(count < block_size) {
-			read_count = count;
-		}
-		if(test_bit(block_offset, h->bitmap, total_block) > 0) {
-			/* read from image */
-			uint64_t offset = offs + i + block_start + (blocks_before_offs / blocks_per_checksum) * 4;
-			if(offset > h->size) {
-				memset(buf + i, 0, read_count);
-				block_offset += 1;
-				nbdkit_debug("offset %llu is empty", offs + i);
-				continue;
-			}
-			r = next->pread(nxdata, buf + i, read_count, offset, flags, err);
-			if(r == -1) {
-				errno = *err;
-				nbdkit_error("pread: %m");
-				return -1;
-			}
-			blocks_before_offs += 1;
-		} else {
-			/* memset to zero */
-			memset(buf + i, 0, read_count);
-			nbdkit_debug("offset %llu is empty", offs + i);
-		}
-		block_offset += 1;
-	}
+	
+	/* TODO search offset in list and split by blocksize */
 
 	return 0;
 }

@@ -54,7 +54,7 @@ static void partclone_close(void *handle)
 	free(h->bitmap);
 }
 
-static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *handle, int readonly)
+static int partclone_prepare(struct nbdkit_next *next, void *handle, int readonly)
 {
 	nbdkit_debug("prepare");
 	struct partclone_handle *h = (struct partclone_handle*)handle;
@@ -108,14 +108,14 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	return 0;
 }
 
-static int64_t partclone_get_size(struct nbdkit_next_ops *next, void *nxdata, void *handle)
+static int64_t partclone_get_size(struct nbdkit_next_ops *next, void *handle)
 {
 	nbdkit_debug("get_size");
 	struct partclone_handle *h = (struct partclone_handle*)handle;
 	return h->image_header->device_size;
 }
 
-static int partclone_pread(struct nbdkit_next_ops *next, void *nxdata, void *handle, void *buf, uint32_t count, uint64_t offs, uint32_t flags, int *err)
+static int partclone_pread(struct nbdkit_next *next void *handle, void *buf, uint32_t count, uint64_t offs, uint32_t flags, int *err)
 {
 	nbdkit_debug("pread");
 	struct partclone_handle *h = (struct partclone_handle*)handle;

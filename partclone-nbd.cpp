@@ -71,7 +71,7 @@ static int partclone_prepare(nbdkit_next *next, void *handle, int readonly)
 	h->image_header = (struct image_header*)malloc(sizeof(struct image_header));
 
 	int err, r;
-	r = next->pread(nxdata, (void*)h->image_header, sizeof(struct image_header), 0, 0, &err);
+	r = next->pread(next, (void*)h->image_header, sizeof(struct image_header), 0, 0, &err);
 	nbdkit_debug("prepare 0");
 	if (r == -1) {
 		errno = err;

@@ -86,7 +86,7 @@ static int partclone_prepare(nbdkit_next *next, void *handle, int readonly)
 	h->bitmap = (uint64_t*)malloc(bitmap_size);
 	h->bitmap_size = bitmap_size;
 
-	r = next->pread(nxdata, (void*)h->bitmap, bitmap_size, sizeof(struct image_header), 0, &err);
+	r = next->pread(next, (void*)h->bitmap, bitmap_size, sizeof(struct image_header), 0, &err);
 	if (r == -1) {
 		errno = err;
 		nbdkit_error("pread: %m");

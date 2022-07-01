@@ -8,8 +8,10 @@
 #include "bitmap.h"
 #include <pthread.h>
 #include <nbdkit-filter.h>
+#include <vector>
 
 struct continuous_block {
+	uint64_t index;
 	/* disk offset */
 	uint64_t offset;
 	/* image offset (without block_start) */
@@ -24,8 +26,7 @@ struct partclone_handle {
 	uint64_t block_start;
 	uint64_t bitmap_size;
 	uint64_t size;
-	struct continuous_block *block;
-	uint64_t block_length;
+	std::vector<continuous_block*> block;
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -99,11 +100,66 @@ static int partclone_prepare(nbdkit_next *next, void *handle, int readonly)
 	nbdkit_debug("block_start=%lu", h->block_start);
 	nbdkit_debug("bitmap_size=%lu", bitmap_size);
 	nbdkit_debug("blocks_per_checksum=%lu", h->image_header->blocks_per_checksum);
+	nbdkit_debug("checksum_size=%lu", h->image_header->checksum_size);
 
+	/* TODO prepare a list of range to search true offset */
+	uint64_t total_block = h->image_header->total_block;
+	uint64_t block_size = h->image_header->block_size;
+	uint64_t checksum_size = h->image_header->checksum_size;
+	uint64_t blocks_per_checksum = h->image_header->blocks_per_checksum;
+	uint64_t image_offset = h->block_start;
+	uint64_t offset = 0;
+	uint64_t last_used_block = -100;
+	uint64_t used_block = 0;
+	continuous_block *b = nullptr;
+
+	for (uint64_t i = 0; i < total_block; i++) {
+		int used = test_bit(i, h->bitmap, total_block);
+		
+		if (used) {
+			if (used_block % blocks_per_checksum == 0) {
+				// hit checksum
+				image_offset += checksum_size;
+				last_used_block = -100;
+			}
+
+			if (last_used_block + 1 != i) {
+				b = new continuous_block;
+				b->index = i;
+				b->offset = offset;
+				b->image_offset = image_offset;
+				b->length = block_size;
+
+				h->block.push_back(b);
+			} else {
+				// continue
+				// use previous block
+				b = h->block.back();
+				b->length += block_size;
+			}
+			
+			used_block++;
+			last_used_block = i;
+			image_offset += block_size;
+		}
+
+		offset += block_size;
+	}
+
+	// debug
+	/*
+	for (std::vector<continuous_block*>::iterator it = h->block.begin(); it != h->block.end(); it++) {
+		b = *it;
+		nbdkit_debug("---");
+		nbdkit_debug("index=%lu", b->index);
+		nbdkit_debug("offset=%lu", b->offset);
+		nbdkit_debug("image_offset=%lu", b->image_offset);
+		nbdkit_debug("length=%lu", b->length);
+	}
+	*/
 	initialized = 1;
 	nbdkit_debug("prepare 3");
 
-	/* TODO prepare a list of range to search true offset */
 
 	return 0;
 }
@@ -119,10 +175,49 @@ static int partclone_pread(nbdkit_next *next, void *handle, void *buf, uint32_t 
 {
 	nbdkit_debug("pread");
 	struct partclone_handle *h = (struct partclone_handle*)handle;
+	continuous_block *b = nullptr;
+	void *buf_ptr = buf;
+	uint64_t offset = offs;
+	uint64_t image_offset = 0;
+	uint32_t counts = count;
+	uint64_t remain_len = 0;
+	int r = 0;
 	
 	/* TODO search offset in list and split by blocksize */
+	for (std::vector<continuous_block*>::iterator it = h->block.begin(); it != h->block.end(); it++) {
+		b = *it;
+		if (counts <= 0) {
+			break;
+		}
+		if (offset >= b->offset && offset < b->offset + b->length) {
+			nbdkit_debug("block_offset=%lu", b->offset);
+			nbdkit_debug("block_image_offset=%lu", b->image_offset);
+			nbdkit_debug("block_length=%lu", b->length);
+			nbdkit_debug("counts=%u", counts);
+			nbdkit_debug("offset=%lu", offset);
 
-	return 0;
+			image_offset = b->image_offset + (b->offset - offset);
+			remain_len = b->length - (b->offset - offset);
+			if (counts > remain_len) {
+				nbdkit_debug("pread remain_len");
+				int tmp = next->pread(next, buf_ptr, remain_len, image_offset, flags, err);
+				if (tmp > 0) {
+					r += tmp;
+					offset += remain_len;
+					counts -= remain_len;
+					buf_ptr += remain_len;
+				}
+
+			} else {
+				nbdkit_debug("pread counts");
+				int tmp = next->pread(next, buf_ptr, counts, image_offset, flags, err);	
+				return tmp;
+			}
+		}
+	}
+
+	nbdkit_debug("pread end");
+	return r;
 }
 
 static struct nbdkit_filter filter = {

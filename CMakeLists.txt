@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(nbdkit-partclone-filter C)
-set(CMAKE_C_STANDARD 99)
+project(nbdkit-partclone-filter CXX)
+set(CMAKE_CXX_STANDARD 20)
 set(NBDKIT_PARTCLONE_FILTER nbdkit-partlcone-filter)
 set(sources
-	partclone-nbd.c
+	partclone-nbd
 )
 
 add_library(${NBDKIT_PARTCLONE_FILTER} SHARED

@@ -9,6 +9,14 @@
 #include <pthread.h>
 #include <nbdkit-filter.h>
 
+struct continuous_block {
+	/* disk offset */
+	uint64_t offset;
+	/* image offset (without block_start) */
+	uint64_t image_offset;
+	uint64_t length;
+};
+
 /* readonly struct, once finished construct */
 struct partclone_handle {
 	struct image_header *image_header;
@@ -16,6 +24,8 @@ struct partclone_handle {
 	uint64_t block_start;
 	uint64_t bitmap_size;
 	uint64_t size;
+	struct continuous_block *block;
+	uint64_t block_length;
 };
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -30,7 +40,7 @@ static void* partclone_open(nbdkit_next_open *next, nbdkit_backend *nxdata, int 
 {
 	nbdkit_debug("open");
 	struct partclone_handle *h = calloc(1, sizeof(struct partclone_handle));
-	if(next(nxdata, 1, exportname) == -1)
+	if (next(nxdata, 1, exportname) == -1)
 		return NULL;
 
 	return h;
@@ -49,10 +59,10 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	nbdkit_debug("prepare");
 	struct partclone_handle *h = handle;
 
-	/*if(initialized) {
+	if (initialized) {
 		nbdkit_debug("already construct global_handle\n");
 		return 0;
-	}*/
+	}
 
 	/* call get_size first */
 	h->size = next->get_size(nxdata);
@@ -63,7 +73,7 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	int err, r;
 	r = next->pread(nxdata, (void*)h->image_header, sizeof(struct image_header), 0, 0, &err);
 	nbdkit_debug("prepare 0");
-	if(r == -1) {
+	if (r == -1) {
 		errno = err;
 		nbdkit_error("pread: %m");
 		return -1;
@@ -71,12 +81,13 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 	nbdkit_debug("prepare 1");
 
 	/* construct bitmap */
+	/* TODO replace 63 64 with MACRO*/
 	uint64_t bitmap_size = (h->image_header->total_block + 63) / 64 * 8;
 	h->bitmap = malloc(bitmap_size);
 	h->bitmap_size = bitmap_size;
 
 	r = next->pread(nxdata, (void*)h->bitmap, bitmap_size, sizeof(struct image_header), 0, &err);
-	if(r == -1) {
+	if (r == -1) {
 		errno = err;
 		nbdkit_error("pread: %m");
 		return -1;
@@ -85,9 +96,9 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 
 	/* get block_start offset, skip bitmap crc32 */
 	h->block_start = sizeof(struct image_header) + bitmap_size + 4;
-	nbdkit_debug("block_start=%llu", h->block_start);
-	nbdkit_debug("bitmap_size=%llu", bitmap_size);
-	nbdkit_debug("blocks_per_checksum=%llu", h->image_header->blocks_per_checksum);
+	nbdkit_debug("block_start=%lu", h->block_start);
+	nbdkit_debug("bitmap_size=%lu", bitmap_size);
+	nbdkit_debug("blocks_per_checksum=%lu", h->image_header->blocks_per_checksum);
 
 	initialized = 1;
 	nbdkit_debug("prepare 3");

@@ -65,10 +65,10 @@ static int partclone_prepare(nbdkit_next *next, void *handle, int readonly)
 	}
 
 	/* call get_size first */
-	h->size = next->get_size(nxdata);
+	h->size = next->get_size(next);
 	
 	/* construct image_header */
-	h->image_header = malloc(sizeof(struct image_header));
+	h->image_header = (struct image_header*)malloc(sizeof(struct image_header));
 
 	int err, r;
 	r = next->pread(nxdata, (void*)h->image_header, sizeof(struct image_header), 0, 0, &err);
@@ -83,7 +83,7 @@ static int partclone_prepare(nbdkit_next *next, void *handle, int readonly)
 	/* construct bitmap */
 	/* TODO replace 63 64 with MACRO*/
 	uint64_t bitmap_size = (h->image_header->total_block + 63) / 64 * 8;
-	h->bitmap = malloc(bitmap_size);
+	h->bitmap = (uint64_t*)malloc(bitmap_size);
 	h->bitmap_size = bitmap_size;
 
 	r = next->pread(nxdata, (void*)h->bitmap, bitmap_size, sizeof(struct image_header), 0, &err);

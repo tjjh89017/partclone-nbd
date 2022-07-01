@@ -36,11 +36,11 @@ static int partclone_thread_model(void)
 	return NBDKIT_THREAD_MODEL_PARALLEL;
 }
 
-static void* partclone_open(nbdkit_next_open *next, nbdkit_backend *nxdata, int readonly, const char *exportname, int is_tls)
+static void* partclone_open(nbdkit_next_open *next, nbdkit_context *context, int readonly, const char *exportname, int is_tls)
 {
 	nbdkit_debug("open");
-	struct partclone_handle *h = calloc(1, sizeof(struct partclone_handle));
-	if (next(nxdata, 1, exportname) == -1)
+	struct partclone_handle *h = (struct partclone_handle*)calloc(1, sizeof(struct partclone_handle));
+	if (next(context, 1, exportname) == -1)
 		return NULL;
 
 	return h;
@@ -49,7 +49,7 @@ static void* partclone_open(nbdkit_next_open *next, nbdkit_backend *nxdata, int 
 static void partclone_close(void *handle)
 {
 	nbdkit_debug("close");
-	struct partclone_handle *h = handle;
+	struct partclone_handle *h = (struct partclone_handle*)handle;
 	free(h->image_header);
 	free(h->bitmap);
 }
@@ -57,7 +57,7 @@ static void partclone_close(void *handle)
 static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *handle, int readonly)
 {
 	nbdkit_debug("prepare");
-	struct partclone_handle *h = handle;
+	struct partclone_handle *h = (struct partclone_handle*)handle;
 
 	if (initialized) {
 		nbdkit_debug("already construct global_handle\n");
@@ -111,14 +111,14 @@ static int partclone_prepare(struct nbdkit_next_ops *next, void *nxdata, void *h
 static int64_t partclone_get_size(struct nbdkit_next_ops *next, void *nxdata, void *handle)
 {
 	nbdkit_debug("get_size");
-	struct partclone_handle *h = handle;
+	struct partclone_handle *h = (struct partclone_handle*)handle;
 	return h->image_header->device_size;
 }
 
 static int partclone_pread(struct nbdkit_next_ops *next, void *nxdata, void *handle, void *buf, uint32_t count, uint64_t offs, uint32_t flags, int *err)
 {
 	nbdkit_debug("pread");
-	struct partclone_handle *h = handle;
+	struct partclone_handle *h = (struct partclone_handle*)handle;
 	
 	/* TODO search offset in list and split by blocksize */
 

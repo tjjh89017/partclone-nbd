@@ -108,7 +108,7 @@ static int partclone_prepare(struct nbdkit_next *next, void *handle, int readonl
 	return 0;
 }
 
-static int64_t partclone_get_size(struct nbdkit_next_ops *next, void *handle)
+static int64_t partclone_get_size(struct nbdkit_next *next, void *handle)
 {
 	nbdkit_debug("get_size");
 	struct partclone_handle *h = (struct partclone_handle*)handle;
